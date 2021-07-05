@@ -1,20 +1,27 @@
 -- case_exercises --
 
+USE employees;
+
 -- exercise 1 Write a query that returns all employees (emp_no), their department number, their start date, their end date, and a new column 'is_current_employee' that is a 1 if the employee is still with the company and 0 if not.
 
 SELECT
-	CONCAT(first_name, ' ', last_name) AS 'Employee Name',
+	CONCAT(first_name, ' ', last_name) AS 'Employee Name', -- selecting the columns we want
+	dept_emp.emp_no AS 'Employee Number',
 	dept_no AS 'Department Number', 
 	from_date AS 'Start Date',
 	to_date AS 'End Date', 
-	IF(to_date > now(),1,0) AS 'Is Current Employee'
+	IF(to_date > now(),1,0) AS 'Is Current Employee' -- categorizing whether or not they're current
 FROM dept_emp
+JOIN employees ON employees.emp_no = dept_emp.emp_no -- joining employees to get first and last name
 JOIN (SELECT emp_no, MAX(to_date) AS max_date
 		FROM dept_emp
-		GROUP BY emp_no) AS last_dept
-		ON dept_emp.emp_no = last_dept.emp_no 
-		AND dept_emp.to_date = last_dept.max_date
-JOIN employees ON employees.emp_no = dept_emp.emp_no;
+		GROUP BY emp_no) AS last_dept -- creating table to sort the most current dept 
+		ON dept_emp.emp_no = last_dept.emp_no -- joining this table 
+		AND dept_emp.to_date = last_dept.max_date;
+
+SELECT emp_no, MAX(to_date)
+FROM dept_emp
+GROUP By emp_no;
 
 
 
