@@ -19,7 +19,7 @@ JOIN employees.departments USING(dept_no);
 SELECT *
 FROM employees_with_departments;
 
-ALTER TABLE employees_with_departments MODIFY full_name VARCHAR(100); -- changed 'add' to 'modify' to fix my error
+ALTER TABLE employees_with_departments MODIFY full_name VARCHAR(100);
 
 DESCRIBE employees_with_departments;
 
@@ -37,7 +37,7 @@ ALTER TABLE employees_with_departments DROP column last_name;
 USE germain_1456;
 
 CREATE TEMPORARY TABLE cents AS
-SELECT *
+SELECT payment_id, customer_id, staff_id, rental_id, amount * 100 as amount_in_pennies, payment_date, last_update
 FROM sakila.payment;
 
 SELECT *
@@ -45,14 +45,14 @@ FROM cents;
 
 DESCRIBE cents;
 
-ALTER TABLE cents MODIFY COLUMN amount INT;
 
-UPDATE cents SET amount = amount * 100;
+ALTER TABLE cents MODIFY COLUMN amount_in_pennies INT;
+
 
 SELECT *
 FROM cents;
 
--- exercise #3 (NOT FINISHED) Find out how the current average pay in each department compares to the overall, historical average pay. In order to make the comparison easier, you should use the Z-score for salaries. In terms of salary, what is the best department right now to work for? The worst?
+-- exercise #3 Find out how the current average pay in each department compares to the overall, historical average pay. In order to make the comparison easier, you should use the Z-score for salaries. In terms of salary, what is the best department right now to work for? The worst?
 
 
 USE employees;
@@ -69,33 +69,59 @@ ORDER BY dept_name;
 SELECT AVG(salary) 
 FROM salaries; -- overall, historical avg salary
 
-select salary, salary - (select avg(salary) from salaries) as "numerator",
-(select std(salary) from salaries) as "denominator"
-from salaries;
-
-
 USE germain_1456;
 
-select avg(salary), std(salary) from employees.salaries;
+SELECT AVG(salary), std(salary) FROM employees.salaries;
+
+-- Saving values for later
+CREATE TEMPORARY TABLE historic_aggregates AS (
+    SELECT AVG(salary) AS avg_salary, std(salary) AS std_salary
+    FROM employees.salaries);
 
 
+SELECT * FROM historic_aggregates;
 
-CREATE TEMPORARY TABLE germain_1456.zscore AS
-SELECT dept_name, AVG(salary) AS current_average_salary
+
+SELECT dept_name, AVG(salary) AS department_current_average
 FROM employees.salaries
-JOIN employees.dept_emp ON dept_emp.emp_no = salaries.emp_no AND dept_emp.to_date > now() AND salaries.to_date > now()
-JOIN employees.departments ON departments.dept_no = dept_emp.dept_no
-WHERE salaries.to_date > now()
+JOIN employees.dept_emp USING(emp_no)
+JOIN employees.departments USING(dept_no)
+WHERE employees.dept_emp.to_date > curdate()
+AND employees.salaries.to_date > curdate()
 GROUP BY dept_name;
 
-SELECT *
-FROM germain_1456.zscore;
 
-ALTER TABLE germain_1456.zscore ADD zscore float(10,3);
+CREATE TEMPORARY TABLE current_info AS (
+    SELECT dept_name, AVG(salary) AS department_current_average
+    FROM employees.salaries
+    JOIN employees.dept_emp USING(emp_no)
+    JOIN employees.departments USING(dept_no)
+    WHERE employees.dept_emp.to_date > curdate()
+    AND employees.salaries.to_date > curdate()
+    GROUP BY dept_name
+);
 
-UPDATE germain_1456.zscore SET zscore =
-((AVG(salary) - (
-SELECT AVG(salary) FROM employees.salaries))/(SELECT STDDEV(salaries.salary) FROM employees.salaries));
+SELECT * FROM current_info;
+
+-- add on all the columns we'll end up needing:
+ALTER TABLE current_info ADD historic_avg FLOAT(10,2);
+ALTER TABLE current_info ADD historic_std FLOAT(10,2);
+ALTER TABLE current_info ADD zscore FLOAT(10,2);
+
+SELECT * FROM current_info;
+
+-- set the avg and std
+UPDATE current_info SET historic_avg = (SELECT avg_salary FROM historic_aggregates);
+UPDATE current_info SET historic_std = (SELECT std_salary FROM historic_aggregates);
+
+SELECT * FROM current_info;
+
+-- update the zscore to hold the calculated zscores
+UPDATE current_info 
+SET zscore = (department_current_average - historic_avg) / historic_std;
+
+SELECT * FROM current_info
+ORDER BY zscore DESC;
 
 
 
@@ -103,4 +129,5 @@ SELECT AVG(salary) FROM employees.salaries))/(SELECT STDDEV(salaries.salary) FRO
 
 
 
+ 
 
